@@ -5,7 +5,7 @@
 Review the `git diff origin/main` output for the issues listed below. Be specific — cite `file:line` and suggest fixes. Skip anything that's fine. Only flag real problems.
 
 **Two-pass review:**
-- **Pass 1 (CRITICAL):** Run SQL & Data Safety and LLM Output Trust Boundary first. These can block `/ship`.
+- **Pass 1 (CRITICAL):** Run SQL & Data Safety, Race Conditions & Concurrency, Migration Safety, and LLM Output Trust Boundary first. These can block `/ship`.
 - **Pass 2 (INFORMATIONAL):** Run all remaining categories. These are included in the PR body but do not block.
 
 **Output format:**
@@ -43,6 +43,12 @@ Be terse. For each issue: one line describing the problem, one line with the fix
 - `find_or_create_by` on columns without unique DB index — concurrent calls can create duplicates
 - Status transitions that don't use atomic `WHERE old_status = ? UPDATE SET new_status` — concurrent updates can skip or double-apply transitions
 - `html_safe` on user-controlled data (XSS) — check any `.html_safe`, `raw()`, or string interpolation into `html_safe` output
+
+#### Migration Safety
+- Hand-written migration SQL using Prisma model names (PascalCase) instead of actual table names (snake_case via `@@map`) — check `@@map` in schema.prisma and prior migrations for the same table
+- Missing `IF NOT EXISTS` / `IF EXISTS` guards on `ALTER TABLE ADD COLUMN` / `DROP COLUMN`
+- Migration references tables or columns created by a later or unapplied migration
+- Migration ordering: does this migration depend on another migration in the same PR being applied first?
 
 #### LLM Output Trust Boundary
 - LLM-generated values (emails, URLs, names) written to DB or passed to mailers without format validation. Add lightweight guards (`EMAIL_REGEXP`, `URI.parse`, `.strip`) before persisting.
@@ -101,7 +107,8 @@ Be terse. For each issue: one line describing the problem, one line with the fix
 CRITICAL (blocks /ship):          INFORMATIONAL (in PR body):
 ├─ SQL & Data Safety              ├─ Conditional Side Effects
 ├─ Race Conditions & Concurrency  ├─ Magic Numbers & String Coupling
-└─ LLM Output Trust Boundary      ├─ Dead Code & Consistency
+├─ Migration Safety               ├─ Dead Code & Consistency
+└─ LLM Output Trust Boundary      ├─ LLM Prompt Issues
                                    ├─ LLM Prompt Issues
                                    ├─ Test Gaps
                                    ├─ Crypto & Entropy
